@@ -1,7 +1,9 @@
 Tensorflow Workspace for K210
 ======
 
+## 介绍
 
+此仓库修改了官方`demo`部分代码,增加了更多的操作空间,并且可以载入冻结的`bp`文件进行继续训练.
 
 ## Kendryte Tensorflow 分类器示例
 1. 下载分类数据集，解压之后将其放置为一个文件夹包含一类图像数据.文件夹名与`mobilenetv1/data/label.txt`一一对应,`mobilenetv1/data/names.list`为类别的别名,也一一对应.
