@@ -73,7 +73,7 @@ def main(args):
                 #         f1.writelines(lines[k].split(":")[1])
                 print('预测 {} :'.format(image_path))
                 for j in range(5):
-                    print("%.2f%%--%s" % (pred[des_idx[999-j]]*100, lines[des_idx[999-j]].strip()))
+                    print("%.2f%%--%s" % (pred[des_idx[args.class_num-1-j]]*100, lines[des_idx[args.class_num-1-j]].strip()))
                 print()
 
 
@@ -87,6 +87,8 @@ def parse_arguments(argv):
                         default='data')
     parser.add_argument('--image_size', type=int,
                         help='image size.', default=224)
+    parser.add_argument('--class_num', type=int,
+                        help='Dimensionality of the embedding.', default=1000)
 
     return parser.parse_args(argv)
 

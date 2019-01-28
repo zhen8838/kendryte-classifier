@@ -11,10 +11,10 @@ python3 train_softmax.py \
 --batch_size 16 \
 --epoch_size 200 \
 --learning_rate 0.0005 \
---max_nrof_epochs 1 \
+--max_nrof_epochs 5 \
 --class_num 5 \
 --use_fixed_image_standardization \
 --optimizer ADAM \
---keep_probability 1.0 
+--keep_probability 1.0 \
 --learning_rate_decay_epochs 10 \
 --learning_rate_decay_factor 0.9
