@@ -21,6 +21,7 @@ from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 import pickle
 from scipy import misc
+from tqdm import tqdm
 
 
 def main(args):
@@ -119,10 +120,12 @@ def main(args):
         cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
         tf.add_to_collection('losses', cross_entropy_mean)
 
-        correct_prediction = tf.cast(tf.equal(tf.argmax(logits, 1), tf.cast(label_batch, tf.int64)), tf.float32)
-        accuracy = tf.reduce_mean(correct_prediction)
+        # correct_prediction = tf.cast(tf.equal(tf.argmax(logits, 1), tf.cast(label_batch, tf.int64)), tf.float32)
+        accuracy, accuracy_op = tf.metrics.accuracy(tf.argmax(logits, 1), tf.cast(label_batch, tf.int64))
+        tf.summary.scalar('Accuracy', accuracy)
 
         total_loss = tf.add_n([cross_entropy_mean], name='total_loss')
+        tf.summary.scalar('total loss', cross_entropy_mean)
 
         # Build a Graph that trains the model with one batch of examples and updates the model parameters
         train_op = base_func.train(total_loss, global_step, args.optimizer,
@@ -147,6 +150,7 @@ def main(args):
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
         summary_writer = tf.summary.FileWriter(log_dir, sess.graph)
+        merged = tf.summary.merge_all()
         coord = tf.train.Coordinator()
         tf.train.start_queue_runners(coord=coord, sess=sess)
 
@@ -165,19 +169,17 @@ def main(args):
             for epoch in range(1, args.max_nrof_epochs+1):
                 step = sess.run(global_step, feed_dict=None)
                 # Train for one epoch
-                t = time.time()
                 cont = train(args, sess, epoch, image_list, label_list, index_dequeue_op, enqueue_op, image_paths_placeholder, labels_placeholder,
                              learning_rate_placeholder, phase_train_placeholder, batch_size_placeholder, control_placeholder, global_step,
                              total_loss, train_op, args.learning_rate_schedule_file,
                              cross_entropy_mean, accuracy, learning_rate,
-                             prelogits, args.random_rotate, args.random_crop, args.random_flip, args.use_fixed_image_standardization)
-                # stat['time_train'][epoch-1] = time.time() - t
-
+                             prelogits, args.random_rotate, args.random_crop, args.random_flip, args.use_fixed_image_standardization,
+                             merged, summary_writer, accuracy_op)
                 if not cont:
                     break
 
                 # Save variables and the metagraph if it doesn't exist already
-                save_variables_and_metagraph(sess, saver, summary_writer, model_dir, subdir, epoch)
+            save_variables_and_metagraph(sess, saver, summary_writer, model_dir, subdir, epoch)
 
     return model_dir
 
@@ -186,7 +188,8 @@ def train(args, sess, epoch, image_list, label_list, index_dequeue_op, enqueue_o
           learning_rate_placeholder, phase_train_placeholder, batch_size_placeholder, control_placeholder, step,
           loss, train_op, learning_rate_schedule_file,
           cross_entropy_mean, accuracy,
-          learning_rate, prelogits,  random_rotate, random_crop, random_flip, use_fixed_image_standardization):
+          learning_rate, prelogits,  random_rotate, random_crop, random_flip, use_fixed_image_standardization,
+          merge, writer, accuracy_op):
     batch_number = 0
 
     if args.learning_rate > 0.0:
@@ -210,20 +213,14 @@ def train(args, sess, epoch, image_list, label_list, index_dequeue_op, enqueue_o
     sess.run(enqueue_op, {image_paths_placeholder: image_paths_array, labels_placeholder: labels_array, control_placeholder: control_array})
 
     # Training loop
-    train_time = 0
-    while batch_number < args.epoch_size:
-        start_time = time.time()
-        feed_dict = {learning_rate_placeholder: lr, phase_train_placeholder: True, batch_size_placeholder: args.batch_size}
-        tensor_list = [loss, train_op, step, prelogits, cross_entropy_mean, learning_rate, accuracy]
-
-        loss_, _, step_, prelogits_, cross_entropy_mean_, lr_, accuracy_ = sess.run(tensor_list, feed_dict=feed_dict)
-
-        duration = time.time() - start_time
-        print('Epoch: [%d][%d/%d]\tTime %.3f\tLoss %2.3f\tXent %2.3f\tAccuracy %2.3f\tLr %2.5f' %
-              (epoch, batch_number+1, args.epoch_size, duration, loss_, cross_entropy_mean_,  accuracy_, lr_))
-        batch_number += 1
-        train_time += duration
-
+    with tqdm(total=args.epoch_size, bar_format='{n_fmt}/{total_fmt} |{bar}| {rate_fmt}{postfix}]', unit=' batch', dynamic_ncols=True) as t:
+        for j in range(args.epoch_size):
+            feed_dict = {learning_rate_placeholder: lr, phase_train_placeholder: True, batch_size_placeholder: args.batch_size}
+            tensor_list = [loss, train_op, step, prelogits, cross_entropy_mean, learning_rate, accuracy, merge, accuracy_op]
+            loss_, _, step_, prelogits_, cross_entropy_mean_, lr_, accuracy_, summary, _ = sess.run(tensor_list, feed_dict=feed_dict)
+            writer.add_summary(summary, step_)
+            t.set_postfix(loss='{:<5.3f}'.format(loss_), acc='{:5.2f}%'.format(accuracy_*100), lr='{:7f}'.format(lr_))
+            t.update()
     return True
 
 
@@ -243,11 +240,11 @@ def save_variables_and_metagraph(sess, saver, summary_writer, model_dir, model_n
         saver.export_meta_graph(metagraph_filename)
         save_time_metagraph = time.time() - start_time
         print('Metagraph saved in %.2f seconds' % save_time_metagraph)
-    summary = tf.Summary()
-    #pylint: disable=maybe-no-member
-    summary.value.add(tag='time/save_variables', simple_value=save_time_variables)
-    summary.value.add(tag='time/save_metagraph', simple_value=save_time_metagraph)
-    summary_writer.add_summary(summary, step)
+    # summary = tf.Summary()
+    # #pylint: disable=maybe-no-member
+    # summary.value.add(tag='time/save_variables', simple_value=save_time_variables)
+    # summary.value.add(tag='time/save_metagraph', simple_value=save_time_metagraph)
+    # summary_writer.add_summary(summary, step)
 
 
 def parse_arguments(argv):

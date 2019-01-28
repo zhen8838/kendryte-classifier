@@ -10,7 +10,7 @@ python3 train_softmax.py \
 --models_base_dir backup_classifier \
 --batch_size 16 \
 --epoch_size 200 \
---learning_rate 0.0005 \
+--learning_rate 0.0004 \
 --max_nrof_epochs 5 \
 --class_num 5 \
 --use_fixed_image_standardization \
